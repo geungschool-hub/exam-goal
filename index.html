@@ -271,9 +271,10 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
 
 /* ════════ 부팅 ════════ */
 (async function init(){
-  // 익명 로그인은 best-effort (DB 규칙이 공개라 실패해도 동작). 일부 학교망에서 SDK 익명로그인이 거부되는 사례 대응.
-  try { await auth.signInAnonymously(); uid=auth.currentUser.uid; }
-  catch(e){ console.warn('익명 로그인 생략(공개 규칙으로 진행):', e&&(e.code||e.message)); uid='noauth'; }
+  // 인증 불필요(examGoals 공개 규칙). 일부 학교망에서 익명로그인이 거부되며 남는 '만료/무효 토큰'이
+  // RTDB 연결을 PERMISSION_DENIED로 막는 사례가 있어, 토큰을 깨끗이 비운 뒤 인증 없이 접속한다.
+  try { await auth.signOut(); } catch(e){ /* 세션 없음 */ }
+  uid='noauth';
   try { const cs=await db.ref(ROOT+'/config').once('value'); if(cs.val()) CFG={...SEED_CFG, ...cs.val()}; if(!Array.isArray(CFG.subjects)||!CFG.subjects.length) CFG.subjects=SEED_CFG.subjects; }
   catch(e){ console.error('설정 로드 실패', e); }
   if(CFG.intro) $('loginIntro').innerHTML = esc(CFG.intro).replace(/\n/g,'<br>');

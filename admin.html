@@ -223,8 +223,8 @@ let subjDraft=[];
 
 /* ===== 부팅 ===== */
 (async function(){
-  // 익명 로그인은 best-effort (DB 규칙 공개로 실패해도 동작). 일부 학교망 SDK 익명로그인 거부 대응.
-  try{ await auth.signInAnonymously(); }catch(e){ console.warn('익명 로그인 생략(공개 규칙으로 진행):', e&&(e.code||e.message)); }
+  // 인증 불필요(examGoals 공개 규칙). 익명로그인 실패가 남긴 무효 토큰이 RTDB를 PERMISSION_DENIED로 막는 것 방지 → 토큰 비우고 인증 없이 접속.
+  try{ await auth.signOut(); }catch(e){ /* 세션 없음 */ }
   try{ CFG=(await db.ref(ROOT+'/config').once('value')).val()||{}; }catch(e){ CFG={}; }
   try{ THASH=(await db.ref(ROOT+'/teacherHash').once('value')).val()||null; }catch(e){ THASH=null; }
   const hasPw=!!THASH;
