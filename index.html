@@ -111,6 +111,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--primary);}
 .sum-row .s-val{font-weight:800; color:var(--primary-ink);}
 .sum-row .s-val .up{color:var(--good); font-size:12px; margin-left:5px; font-weight:800;}
 .saved-banner{background:#eafaf0; border:1.5px solid #b8e8c8; color:#157a3a; border-radius:13px; padding:13px 15px; font-size:13.5px; font-weight:700; text-align:center; margin-bottom:16px; line-height:1.5;}
+.health-note{background:#fff7ed; border:1.5px solid #fed7aa; color:#9a3412; border-radius:14px; padding:14px 16px; font-size:14px; line-height:1.6; text-align:center; margin-bottom:16px;}
+.autosave-tag{text-align:center; font-size:12px; color:var(--sub); min-height:16px; margin-bottom:6px; font-weight:600;}
 
 /* ===== 토스트 ===== */
 #toast{position:fixed; left:50%; bottom:32px; transform:translateX(-50%) translateY(20px); background:#1d2433; color:#fff; padding:12px 20px; border-radius:999px; font-size:13.5px; font-weight:700; opacity:0; transition:.25s; pointer-events:none; z-index:99; box-shadow:0 8px 24px rgba(0,0,0,.25); max-width:90vw; text-align:center;}
@@ -185,17 +187,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--primary);}
         <p class="hint" style="margin:-6px 2px 12px;">기말고사에서 <b>내가 응시하는 과목</b>을 체크하면, 그 과목의 목표를 적을 수 있어요.</p>
         <div id="subjList"></div>
 
-        <div class="card" id="dailyCard">
-          <p class="label">⏰ 시험 전까지 하루 학습시간 목표</p>
-          <div class="unit">
-            <input id="dailyHours" type="number" inputmode="decimal" min="0" max="24" step="0.5" placeholder="예: 4">
-            <span class="u">시간 / 일</span>
-          </div>
-          <p class="hint">남은 기간 동안 매일 공부할 시간 목표예요. 무리하지 않게, 지킬 수 있는 만큼!</p>
-        </div>
+        <div class="health-note">💪 남은 기간 열심히 하되, <b>건강과 체력에 꼭 유의할 것!</b></div>
 
-        <button class="btn accent" id="saveBtn" onclick="saveGoals()" style="margin-top:6px;">💾 목표 제출하기</button>
-        <button class="btn ghost hidden" id="viewSummaryBtn" onclick="renderSummary()">내 목표 다시 보기</button>
+        <div id="autoSaveTag" class="autosave-tag"></div>
+        <button class="btn accent" id="saveBtn" onclick="saveGoals()">✅ 제출 완료하기</button>
+        <p class="hint" style="text-align:center;">입력한 내용은 <b>자동으로 저장</b>돼요. 다 정했으면 <b>제출 완료</b>를 눌러 주세요.</p>
 
         <!-- 요약 -->
         <div id="summaryWrap" class="hidden">
@@ -263,7 +259,7 @@ const SEED_CFG = {
 
 /* ===== 상태 ===== */
 let uid=null, CFG={...SEED_CFG};
-let sid=null, myName=null, mySub=null;
+let sid=null, myName=null, mySub=null, mySubmittedAt=null, saveTimer=null, autoSaveAttached=false;
 let loginAcct=null, loginSid=null, loginName=null, loginMode=null;
 
 /* ===== 유틸 ===== */
@@ -386,12 +382,42 @@ async function enterApp(s, name){
 
   renderDday();
   renderSubjects();
-  $('dailyHours').value = (mySub&&mySub.dailyHours!=null) ? mySub.dailyHours : '';
+  attachAutoSave();
+  mySubmittedAt = (mySub&&mySub.submittedAt) || null;
 
-  if(mySub&&mySub.updatedAt){
+  if(mySubmittedAt){
     showSavedBanner();
     renderSummary();
   }
+}
+
+/* ── 자동 저장: 제출 버튼을 안 눌러도 입력 즉시 저장(교사가 실시간 확인) ── */
+function attachAutoSave(){
+  if(autoSaveAttached) return; autoSaveAttached=true;
+  $('subjList').addEventListener('input', scheduleAutoSave);
+  $('subjList').addEventListener('change', scheduleAutoSave);
+}
+function setAutoTag(t){ const el=$('autoSaveTag'); if(el) el.textContent=t; }
+function buildRec(){
+  const rec={ studentId:sid, name:myName, selected:selectedIds(), subjects:collectSubjects(),
+    updatedAt:firebase.database.ServerValue.TIMESTAMP };
+  if(mySubmittedAt) rec.submittedAt=mySubmittedAt;
+  return rec;
+}
+function scheduleAutoSave(){
+  if(selectedIds().length===0) return;
+  setAutoTag('저장 중…');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(doAutoSave, 800);
+}
+async function doAutoSave(){
+  if(selectedIds().length===0) return;
+  try{
+    const rec=buildRec();
+    await db.ref(ROOT+'/submissions/'+sid).set(rec);
+    mySub=rec; mySub.updatedAt=Date.now();
+    setAutoTag('✅ 자동 저장됨');
+  }catch(e){ console.error(e); setAutoTag('⚠️ 저장 실패 — 잠시 후 자동 재시도'); }
 }
 
 function renderDday(){
@@ -480,28 +506,25 @@ function clampScore(v){ let n=Math.round(+v); if(isNaN(n)) return null; return M
 async function saveGoals(){
   const selected=selectedIds();
   if(selected.length===0){ toast('내가 보는 과목을 먼저 체크해 주세요'); return; }
-  const subjects=collectSubjects();
-  const dh=$('dailyHours').value;
-  const rec={
-    studentId:sid, name:myName, selected, subjects,
-    dailyHours: dh===''?null:Math.max(0,Math.min(24,+dh)),
-    updatedAt:firebase.database.ServerValue.TIMESTAMP
-  };
+  clearTimeout(saveTimer);
+  if(!mySubmittedAt) mySubmittedAt=Date.now();
+  const rec=buildRec();
   const b=$('saveBtn'); const orig=b.textContent; b.disabled=true; b.textContent='제출 중…';
   try{
     await db.ref(ROOT+'/submissions/'+sid).set(rec);
     mySub=rec; mySub.updatedAt=Date.now();
+    setAutoTag('✅ 자동 저장됨');
     toast('목표가 제출되었어요! 🎯');
     showSavedBanner(); renderSummary();
     $('summaryWrap').scrollIntoView({behavior:'smooth', block:'start'});
   } catch(e){
-    console.error(e); toast('⚠️ 제출 실패 — 잠시 후 다시 시도해 주세요');
+    console.error(e); mySubmittedAt=null; toast('⚠️ 제출 실패 — 잠시 후 다시 시도해 주세요');
   } finally{ b.disabled=false; b.textContent=orig; }
 }
 
 function showSavedBanner(){
   const b=$('savedBanner'); b.classList.remove('hidden');
-  b.innerHTML='✅ 목표가 제출되었어요. 마감 전까지 수정하면 자동 저장돼요.';
+  b.innerHTML='✅ 제출 완료! 마감 전까지 수정하면 자동 저장돼요.';
   $('saveBtn').textContent='💾 수정해서 다시 제출';
 }
 
@@ -522,8 +545,7 @@ function renderSummary(){
     const noteTxt = v.note ? `<div style="font-size:12px; color:var(--sub); margin-top:3px; line-height:1.5;">✏️ ${esc(v.note)}</div>` : '';
     return `<div class="sum-row" style="flex-direction:column; align-items:stretch;"><div style="display:flex; justify-content:space-between; align-items:center;"><span class="s-name">${esc(su.name)}</span><span class="s-val">${prevTxt}${val}${up}</span></div>${noteTxt}</div>`;
   }).join('');
-  const dh = mySub.dailyHours!=null ? `<div class="sum-row"><span class="s-name">⏰ 하루 학습시간</span><span class="s-val">${mySub.dailyHours}시간</span></div>` : '';
-  $('summaryCard').innerHTML = rows + dh;
+  $('summaryCard').innerHTML = rows;
   $('summaryWrap').classList.remove('hidden');
 }
 

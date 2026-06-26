@@ -348,21 +348,22 @@ function renderStatus(){
   const subs=subsArray(), subj=subjList();
   // 통계
   const n=subs.length;
-  let ups=0, upCnt=0, dhSum=0, dhCnt=0;
+  let ups=0, upCnt=0, doneCnt=0;
   subs.forEach(s=>{
     if(s.subjects) Object.values(s.subjects).forEach(v=>{ if(v.prev!=null&&v.target!=null){ ups+=(v.target-v.prev); upCnt++; }});
-    if(s.dailyHours!=null){ dhSum+=s.dailyHours; dhCnt++; }
+    if(s.submittedAt) doneCnt++;
   });
+  const draftCnt = n - doneCnt;
   const rosterN = ROSTER.length;
   $('statsBox').innerHTML = [
-    ['📥 제출', n+(rosterN?(' / '+rosterN):'')+'명'],
+    ['✅ 제출 완료', doneCnt+(rosterN?(' / '+rosterN):'')+'명'],
+    ['✍️ 작성 중', draftCnt+'명'],
     ['📈 평균 목표 상승', upCnt?('+'+(ups/upCnt).toFixed(1)+'점'):'-'],
-    ['⏰ 평균 학습시간', dhCnt?((dhSum/dhCnt).toFixed(1)+'시간'):'-'],
-    ['🚨 미제출', rosterN?Math.max(0,rosterN-n)+'명':'-']
+    ['🚨 미제출', rosterN?Math.max(0,rosterN-doneCnt)+'명':'-']
   ].map(([l,v])=>`<div class="stat"><div class="n">${v}</div><div class="l">${l}</div></div>`).join('');
 
   // 표
-  const th=`<tr><th>학번</th><th>이름</th>${subj.map(s=>`<th>${esc(s.name)}</th>`).join('')}<th>하루</th><th>제출시각</th><th></th></tr>`;
+  const th=`<tr><th>학번</th><th>이름</th><th>상태</th>${subj.map(s=>`<th>${esc(s.name)}</th>`).join('')}<th>수정시각</th><th></th></tr>`;
   $('subTable').querySelector('thead').innerHTML=th;
   const tb=subs.map(s=>{
     const selSet=new Set(Array.isArray(s.selected)?s.selected:Object.keys(s.subjects||{}));
@@ -376,18 +377,20 @@ function renderStatus(){
       const noteMark = v.note?` <span style="cursor:help">📝</span>`:'';
       return `<td${v.note?` title="${esc(v.note)}"`:''}><span class="cellv">${prev}${main||'-'}${arrow}</span>${noteMark}</td>`;
     }).join('');
-    const dh=s.dailyHours!=null?(s.dailyHours+'h'):'<span class="muted">-</span>';
+    const status=s.submittedAt
+      ? '<span style="background:#e7f7ec;color:var(--good);font-weight:800;font-size:11px;padding:3px 8px;border-radius:999px;white-space:nowrap;">제출완료</span>'
+      : '<span style="background:#fdf2e2;color:#b9770f;font-weight:800;font-size:11px;padding:3px 8px;border-radius:999px;white-space:nowrap;">작성중</span>';
     const when=s.updatedAt?fmtTime(s.updatedAt):'-';
     return `<tr>
-      <td>${esc(s.sid)}</td><td class="name">${esc(s.name)}</td>${cells}
-      <td>${dh}</td><td style="font-size:11.5px; color:var(--sub)">${when}</td>
+      <td>${esc(s.sid)}</td><td class="name">${esc(s.name)}</td><td>${status}</td>${cells}
+      <td style="font-size:11.5px; color:var(--sub)">${when}</td>
       <td style="white-space:nowrap;">
         <button class="btn ghost sm" onclick="resetPin('${esc(s.sid)}','${esc(s.name)}')">PIN초기화</button>
         <button class="btn danger sm" onclick="delSub('${esc(s.sid)}','${esc(s.name)}')">삭제</button>
       </td></tr>`;
   }).join('');
-  $('subTable').querySelector('tbody').innerHTML = tb || `<tr><td colspan="${subj.length+5}" style="padding:30px; color:var(--sub)">아직 제출한 학생이 없어요.</td></tr>`;
-  $('statusUpdated').textContent='실시간 갱신 중 · '+n+'명 제출';
+  $('subTable').querySelector('tbody').innerHTML = tb || `<tr><td colspan="${subj.length+5}" style="padding:30px; color:var(--sub)">아직 작성한 학생이 없어요.</td></tr>`;
+  $('statusUpdated').textContent='실시간 갱신 중 · 제출완료 '+doneCnt+' · 작성중 '+draftCnt;
 
   // 과목별 신청자 수
   const cnt={}; subj.forEach(su=>cnt[su.id]=0);
@@ -411,11 +414,11 @@ function delSub(sid,name){
 
 function exportCsv(){
   const subj=subjList(), subs=subsArray();
-  const head=['학번','이름',...subj.flatMap(s=>[s.name+' 이전',s.name+' 목표',s.name+' 등급',s.name+' 노력할부분']),'하루학습시간','제출시각'];
+  const head=['학번','이름','상태',...subj.flatMap(s=>[s.name+' 이전',s.name+' 목표',s.name+' 등급',s.name+' 노력할부분']),'수정시각'];
   const rows=subs.map(s=>{
-    const base=[s.sid,s.name];
+    const base=[s.sid,s.name,s.submittedAt?'제출완료':'작성중'];
     subj.forEach(su=>{ const v=(s.subjects||{})[su.id]||{}; base.push(v.prev??'',v.target??'',v.grade??'',v.note??''); });
-    base.push(s.dailyHours??''); base.push(s.updatedAt?fmtTime(s.updatedAt):'');
+    base.push(s.updatedAt?fmtTime(s.updatedAt):'');
     return base;
   });
   const csv=[head,...rows].map(r=>r.map(c=>`"${String(c==null?'':c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
@@ -445,11 +448,13 @@ async function saveRoster(){
 function renderMiss(){
   const box=$('missBox');
   if(!ROSTER.length){ box.innerHTML='<p class="hint">명단을 저장하면 미제출 학생이 표시됩니다.</p>'; return; }
-  const done=new Set(Object.keys(SUBMISSIONS));
-  const miss=ROSTER.filter(r=>!done.has(r.sid));
+  // 제출완료(submittedAt 있음)만 '완료'로 간주. 작성중(✍️)은 미제출에 포함하되 표시 구분.
+  const submitted=new Set(Object.keys(SUBMISSIONS).filter(k=>SUBMISSIONS[k]&&SUBMISSIONS[k].submittedAt));
+  const drafting=new Set(Object.keys(SUBMISSIONS).filter(k=>SUBMISSIONS[k]&&!SUBMISSIONS[k].submittedAt));
+  const miss=ROSTER.filter(r=>!submitted.has(r.sid));
   if(!miss.length){ box.innerHTML='<p style="color:var(--good); font-weight:800;">🎉 전원 제출 완료!</p>'; return; }
-  box.innerHTML = `<p class="hint" style="margin-bottom:8px;">미제출 <b style="color:var(--danger)">${miss.length}명</b> / 전체 ${ROSTER.length}명</p>`+
-    `<div class="miss-list">${miss.map(r=>`<span class="miss-chip">${esc(r.sid)} ${esc(r.name)}</span>`).join('')}</div>`;
+  box.innerHTML = `<p class="hint" style="margin-bottom:8px;">미제출 <b style="color:var(--danger)">${miss.length}명</b> / 전체 ${ROSTER.length}명 <span style="color:var(--sub)">(✍️=작성 중)</span></p>`+
+    `<div class="miss-list">${miss.map(r=>`<span class="miss-chip${drafting.has(r.sid)?' done-chip':''}">${drafting.has(r.sid)?'✍️ ':''}${esc(r.sid)} ${esc(r.name)}</span>`).join('')}</div>`;
 }
 
 /* ===== 모달 ===== */
