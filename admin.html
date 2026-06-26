@@ -257,7 +257,7 @@ async function gateSubmit(){
       if(h!==THASH){ $('gateErr').textContent='비밀번호가 올바르지 않아요'; return; }
       localStorage.setItem(TADMIN_KEY,h); enterAdmin();
     }
-  } catch(e){ console.error(e); $('gateErr').textContent='오류가 발생했어요'; }
+  } catch(e){ console.error(e); $('gateErr').innerHTML='⚠️ 저장 중 오류가 발생했어요. 다시 시도해 주세요.<br><small style="color:#9aa1b2">('+((e&&(e.code||e.message))||'unknown')+')</small>'; }
   finally{ b.disabled=false; }
 }
 $('gatePw').addEventListener('keydown',e=>{ if(e.key==='Enter'){ if($('gatePw2Field').classList.contains('hidden')) gateSubmit(); else $('gatePw2').focus(); }});
