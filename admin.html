@@ -286,11 +286,7 @@ function loadConfigForm(){
   $('cfgDueDate').value=CFG.dueDate||'';
   $('cfgShowGrade').value=(CFG.showGrade===false)?'0':'1';
   $('cfgIntro').value=CFG.intro||'';
-  subjDraft = Array.isArray(CFG.subjects)&&CFG.subjects.length ? CFG.subjects.map(s=>({...s})) :
-    [{id:'23',name:'영어1'},{id:'27',name:'동아시아 역사 기행'},{id:'39',name:'물질과 에너지'},{id:'19',name:'대수'},
-     {id:'29',name:'세계시민과 지리'},{id:'37',name:'역학과 에너지'},{id:'15',name:'문학'},{id:'75',name:'중국어Ⅰ'},
-     {id:'77',name:'일본어Ⅰ'},{id:'41',name:'생명과학'},{id:'21',name:'인공지능 수학'},{id:'33',name:'법과 사회'},
-     {id:'43',name:'지구과학'},{id:'17',name:'언어생활 탐구'},{id:'35',name:'윤리와 사상'}];
+  subjDraft = Array.isArray(CFG.subjects)&&CFG.subjects.length ? CFG.subjects.map(s=>({...s})) : SEED_SUBJECTS.map(s=>({...s}));
   renderSubjEdit();
 }
 function renderSubjEdit(){
@@ -339,7 +335,17 @@ async function changePw(){
 }
 
 /* ===== 제출 현황 ===== */
-function subjList(){ return Array.isArray(CFG.subjects)&&CFG.subjects.length?CFG.subjects:[]; }
+// 설정 저장 전에도 보이도록 기본 시간표 과목으로 폴백 + 제출 데이터에 있는 과목 코드 누락 없이 포함
+const SEED_SUBJECTS=[{id:'23',name:'영어1'},{id:'27',name:'동아시아 역사 기행'},{id:'39',name:'물질과 에너지'},{id:'19',name:'대수'},{id:'29',name:'세계시민과 지리'},{id:'37',name:'역학과 에너지'},{id:'15',name:'문학'},{id:'75',name:'중국어Ⅰ'},{id:'77',name:'일본어Ⅰ'},{id:'41',name:'생명과학'},{id:'21',name:'인공지능 수학'},{id:'33',name:'법과 사회'},{id:'43',name:'지구과학'},{id:'17',name:'언어생활 탐구'},{id:'35',name:'윤리와 사상'}];
+function subjList(){
+  const base = (Array.isArray(CFG.subjects)&&CFG.subjects.length) ? CFG.subjects.slice() : SEED_SUBJECTS.slice();
+  const have=new Set(base.map(s=>s.id));
+  Object.values(SUBMISSIONS||{}).forEach(s=>{
+    const ids=Array.isArray(s.selected)?s.selected:Object.keys(s.subjects||{});
+    ids.forEach(id=>{ if(id&&!have.has(id)){ have.add(id); base.push({id, name:'['+id+']'}); } });
+  });
+  return base;
+}
 function subsArray(){
   return Object.keys(SUBMISSIONS).map(k=>({sid:k,...SUBMISSIONS[k]}))
     .sort((a,b)=>String(a.sid).localeCompare(String(b.sid)));
