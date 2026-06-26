@@ -273,9 +273,12 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
 (async function init(){
   try { await auth.signInAnonymously(); uid=auth.currentUser.uid; }
   catch(e){
-    $('loginErr').innerHTML = (e&&e.code==='auth/operation-not-allowed')
-      ? '⚠️ 아직 준비 중이에요. 선생님께 알려 주세요.'
-      : '⚠️ 서버 연결 실패. 잠시 후 새로고침해 주세요.';
+    const code=(e&&(e.code||e.message))||'unknown';
+    let msg;
+    if(code==='auth/operation-not-allowed') msg='⚠️ 아직 준비 중이에요. 선생님께 알려 주세요.';
+    else if(code==='auth/network-request-failed') msg='⚠️ 네트워크 연결이 막혀 있어요.<br>학교 와이파이/유선망은 차단될 수 있어요 — <b>휴대폰 데이터(LTE/5G)</b>로 접속해 보세요.';
+    else msg='⚠️ 서버 연결 실패. 잠시 후 새로고침해 주세요.';
+    $('loginErr').innerHTML = msg+'<br><small style="color:#9aa1b2">('+code+')</small>';
     $('fullLoad').classList.add('hidden'); return;
   }
   try { const cs=await db.ref(ROOT+'/config').once('value'); if(cs.val()) CFG={...SEED_CFG, ...cs.val()}; if(!Array.isArray(CFG.subjects)||!CFG.subjects.length) CFG.subjects=SEED_CFG.subjects; }
