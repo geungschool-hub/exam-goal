@@ -377,7 +377,7 @@ function renderStatus(){
       const v=(s.subjects||{})[su.id];
       const picked=selSet.has(su.id);
       if(!v||(v.target==null&&v.grade==null&&v.prev==null)) return picked?`<td><span class="up">✓</span></td>`:`<td class="muted">·</td>`;
-      let main=''; if(v.target!=null) main=v.target+'점'; if(v.grade) main+=(main?' ':'')+v.grade+'등';
+      let main=''; if(v.target!=null) main=v.target+'점'; if(v.grade) main+=(main?' ':'')+v.grade+'등급';
       let prev=v.prev!=null?`<span class="p">${v.prev}→</span> `:'';
       let arrow=''; if(v.prev!=null&&v.target!=null){ const d=v.target-v.prev; if(d>0)arrow=` <span class="up">▲${d}</span>`; else if(d<0)arrow=` <span class="dn">▼${-d}</span>`; }
       const noteMark = v.note?` <span style="cursor:help">📝</span>`:'';
@@ -391,6 +391,7 @@ function renderStatus(){
       <td>${esc(s.sid)}</td><td class="name">${esc(s.name)}</td><td>${status}</td>${cells}
       <td style="font-size:11.5px; color:var(--sub)">${when}</td>
       <td style="white-space:nowrap;">
+        <button class="btn sm" onclick="openDetail('${esc(s.sid)}')">📄 보기</button>
         <button class="btn ghost sm" onclick="resetPin('${esc(s.sid)}','${esc(s.name)}')">PIN초기화</button>
         <button class="btn danger sm" onclick="delSub('${esc(s.sid)}','${esc(s.name)}')">삭제</button>
       </td></tr>`;
@@ -404,6 +405,33 @@ function renderStatus(){
   $('subjCountBox').innerHTML = subj.map(su=>`<span class="miss-chip ${cnt[su.id]?'done-chip':''}">[${esc(su.id)}] ${esc(su.name)} <b>${cnt[su.id]}명</b></span>`).join('') || '<span class="hint">제출 데이터가 쌓이면 표시됩니다.</span>';
 }
 function fmtTime(ts){ const d=new Date(ts); const p=x=>String(x).padStart(2,'0'); return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+
+function openDetail(sid){
+  const s=SUBMISSIONS[sid]; if(!s){ toast('데이터가 없어요'); return; }
+  const subj=subjList();
+  const sel=new Set(Array.isArray(s.selected)?s.selected:Object.keys(s.subjects||{}));
+  const list=subj.filter(su=>sel.has(su.id)).map(su=>{
+    const v=(s.subjects||{})[su.id]||{};
+    let score = v.prev!=null ? `<span style="color:var(--sub)">${v.prev}점 →</span> ` : '';
+    score += v.target!=null ? `<b style="color:var(--primary-ink)">${v.target}점</b>` : '<span style="color:#b9c0cf">목표 미입력</span>';
+    if(v.grade) score += ` · 목표 ${v.grade}등급`;
+    if(v.prev!=null&&v.target!=null){ const d=v.target-v.prev; if(d>0) score+=` <span style="color:var(--good);font-weight:800">▲${d}</span>`; else if(d<0) score+=` <span style="color:var(--danger);font-weight:800">▼${-d}</span>`; }
+    const note = v.note ? `<div style="margin-top:5px; font-size:13.5px; color:#1d6fb8; line-height:1.5;">✏️ ${esc(v.note)}</div>` : '';
+    return `<div style="padding:11px 0; border-bottom:1px solid var(--line);">
+      <div style="font-weight:800; font-size:14.5px;">${esc(su.name)} <span style="font-size:11px;color:var(--sub);font-weight:600">[${esc(su.id)}]</span></div>
+      <div style="font-size:14px; margin-top:3px;">${score}</div>${note}</div>`;
+  }).join('') || '<p class="hint" style="padding:14px 0;">아직 과목을 선택하지 않았어요.</p>';
+  const status = s.submittedAt
+    ? '<span style="color:var(--good);font-weight:800">🟢 제출완료</span>'
+    : '<span style="color:#b9770f;font-weight:800">🟠 작성중</span>';
+  $('modalRoot').innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:440px; max-height:88vh; display:flex; flex-direction:column;">
+      <h3 style="margin-bottom:2px;">${esc(s.name)} <span style="font-size:13px;color:var(--sub);font-weight:600">${esc(sid)}</span></h3>
+      <div style="font-size:13px; margin-bottom:10px;">${status} · 마지막 수정 ${s.updatedAt?fmtTime(s.updatedAt):'-'}</div>
+      <div style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;">${list}</div>
+      <div class="mbtns"><button class="btn ghost" onclick="closeModal()" style="flex:1;">닫기</button></div>
+    </div></div>`;
+}
 
 function resetPin(sid,name){
   confirmModal('PIN 초기화', `<b>${esc(name)}</b>(${esc(sid)}) 학생의 PIN을 초기화할까요?<br>학생이 학번·이름으로 다시 들어와 새 PIN을 정하게 됩니다.`, 'good', async()=>{
