@@ -223,14 +223,8 @@ let subjDraft=[];
 
 /* ===== 부팅 ===== */
 (async function(){
-  try{ await auth.signInAnonymously(); }catch(e){
-    const code=(e&&(e.code||e.message))||'unknown';
-    const net = code==='auth/network-request-failed';
-    $('gateErr').innerHTML = (net
-      ? '⚠️ 네트워크 연결이 막혀 있어요. 학교 와이파이/유선망은 차단될 수 있어요 — <b>휴대폰 데이터(LTE/5G)</b>로 접속해 보세요.'
-      : '⚠️ 서버 연결 실패. 잠시 후 다시 시도해 주세요.')
-      + '<br><small style="color:#9aa1b2">('+code+')</small>';
-  }
+  // 익명 로그인은 best-effort (DB 규칙 공개로 실패해도 동작). 일부 학교망 SDK 익명로그인 거부 대응.
+  try{ await auth.signInAnonymously(); }catch(e){ console.warn('익명 로그인 생략(공개 규칙으로 진행):', e&&(e.code||e.message)); }
   try{ CFG=(await db.ref(ROOT+'/config').once('value')).val()||{}; }catch(e){ CFG={}; }
   try{ THASH=(await db.ref(ROOT+'/teacherHash').once('value')).val()||null; }catch(e){ THASH=null; }
   const hasPw=!!THASH;
