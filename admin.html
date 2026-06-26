@@ -20,7 +20,7 @@ input,select,textarea{font-family:inherit;}
 .wrap{max-width:1080px; margin:0 auto; padding:18px 16px 60px;}
 
 /* 게이트 */
-.gate{min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:20px;}
+.gate{min-height:100vh; min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:20px; padding-top:calc(20px + env(safe-area-inset-top)); padding-bottom:calc(20px + env(safe-area-inset-bottom));}
 .gate-card{background:#fff; border-radius:20px; box-shadow:var(--shadow); padding:30px 26px; width:100%; max-width:380px;}
 .gate-card h1{margin:0 0 4px; font-size:21px; font-weight:900;}
 .gate-card p{margin:0 0 18px; font-size:13px; color:var(--sub); line-height:1.5;}
@@ -373,7 +373,8 @@ function renderStatus(){
       let main=''; if(v.target!=null) main=v.target+'점'; if(v.grade) main+=(main?' ':'')+v.grade+'등';
       let prev=v.prev!=null?`<span class="p">${v.prev}→</span> `:'';
       let arrow=''; if(v.prev!=null&&v.target!=null){ const d=v.target-v.prev; if(d>0)arrow=` <span class="up">▲${d}</span>`; else if(d<0)arrow=` <span class="dn">▼${-d}</span>`; }
-      return `<td><span class="cellv">${prev}${main||'-'}${arrow}</span></td>`;
+      const noteMark = v.note?` <span style="cursor:help">📝</span>`:'';
+      return `<td${v.note?` title="${esc(v.note)}"`:''}><span class="cellv">${prev}${main||'-'}${arrow}</span>${noteMark}</td>`;
     }).join('');
     const dh=s.dailyHours!=null?(s.dailyHours+'h'):'<span class="muted">-</span>';
     const when=s.updatedAt?fmtTime(s.updatedAt):'-';
@@ -410,10 +411,10 @@ function delSub(sid,name){
 
 function exportCsv(){
   const subj=subjList(), subs=subsArray();
-  const head=['학번','이름',...subj.flatMap(s=>[s.name+' 이전',s.name+' 목표',s.name+' 등급']),'하루학습시간','제출시각'];
+  const head=['학번','이름',...subj.flatMap(s=>[s.name+' 이전',s.name+' 목표',s.name+' 등급',s.name+' 노력할부분']),'하루학습시간','제출시각'];
   const rows=subs.map(s=>{
     const base=[s.sid,s.name];
-    subj.forEach(su=>{ const v=(s.subjects||{})[su.id]||{}; base.push(v.prev??'',v.target??'',v.grade??''); });
+    subj.forEach(su=>{ const v=(s.subjects||{})[su.id]||{}; base.push(v.prev??'',v.target??'',v.grade??'',v.note??''); });
     base.push(s.dailyHours??''); base.push(s.updatedAt?fmtTime(s.updatedAt):'');
     return base;
   });
